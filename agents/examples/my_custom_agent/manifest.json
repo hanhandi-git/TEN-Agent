@@ -1,0 +1,22 @@
+{
+  "type": "app",
+  "name": "my_custom_agent",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "type": "system",
+      "name": "ten_runtime_go",
+      "version": "0.8"
+    },
+    {
+      "type": "system",
+      "name": "ten_runtime_python",
+      "version": "0.8"
+    },
+    {
+      "type": "extension",
+      "name": "my_python_extension",
+      "version": "0.1.0"
+    }
+  ]
+}
