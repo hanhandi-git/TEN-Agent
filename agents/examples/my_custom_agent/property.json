@@ -1,0 +1,21 @@
+{
+  "_ten": {
+    "predefined_graphs": [
+      {
+        "name": "my_custom_graph",
+        "auto_start": true,
+        "nodes": [
+          {
+            "type": "extension",
+            "name": "my_extension",
+            "addon": "my_python_extension",
+            "extension_group": "default",
+            "property": {
+              "greeting": "Hello from my custom agent!"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

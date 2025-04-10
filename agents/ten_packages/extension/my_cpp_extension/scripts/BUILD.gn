@@ -1,0 +1,17 @@
+# 构建C++扩展
+shared_library("my_cpp_extension") {
+  sources = [
+    "src/extension.cpp",
+  ]
+  
+  include_dirs = [
+    ".",
+    "//ten_packages/system/ten_runtime_cpp/include",
+  ]
+  
+  deps = [
+    "//ten_packages/system/ten_runtime_cpp:ten_runtime_cpp",
+  ]
+  
+  output_dir = "lib"
+}

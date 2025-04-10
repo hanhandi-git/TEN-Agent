@@ -1,0 +1,50 @@
+{
+  "type": "extension",
+  "name": "my_go_extension",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "type": "system",
+      "name": "ten_runtime_go",
+      "version": "0.8"
+    }
+  ],
+  "api": {
+    "property": {
+      "greeting": {
+        "type": "string"
+      }
+    },
+    "data_in": [
+      {
+        "name": "text_data",
+        "property": {
+          "text": {
+            "type": "string"
+          },
+          "is_final": {
+            "type": "bool"
+          }
+        }
+      }
+    ],
+    "data_out": [
+      {
+        "name": "text_data",
+        "property": {
+          "text": {
+            "type": "string"
+          },
+          "end_of_segment": {
+            "type": "bool"
+          }
+        }
+      }
+    ],
+    "cmd_in": [
+      {
+        "name": "hello"
+      }
+    ]
+  }
+}
