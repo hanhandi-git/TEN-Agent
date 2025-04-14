@@ -1,0 +1,28 @@
+{
+  "_ten": {
+    "predefined_graphs": [
+      {
+        "name": "graph_generator",
+        "auto_start": true,
+        "nodes": [
+          {
+            "type": "extension",
+            "name": "llm",
+            "addon": "openai_chatgpt_python",
+            "extension_group": "default",
+            "property": {
+              "api_key": "${env:OPENAI_API_KEY|sk-b0c4eafa376940a0808a0898d7e0e848}",
+              "base_url": "${env:OPENAI_API_BASE|https://api.deepseek.com/v1}",
+              "model": "${env:OPENAI_MODEL|deepseek-chat}",
+              "max_tokens": 2048,
+              "temperature": 0.7,
+              "prompt": "You are a diagram expert. Convert the user's text description into a diagram using the specified format (Graphviz or Mermaid). Only output the code block with the diagram code, nothing else. Make sure your code is valid and can be rendered correctly."
+            }
+          }
+        ],
+        "connections": []
+      }
+    ],
+    "log_level": 3
+  }
+}

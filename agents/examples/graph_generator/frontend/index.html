@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text to Diagram Converter</title>
+    <!-- 添加 Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <!-- 添加 Viz.js 用于 Graphviz 渲染 -->
+    <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2/viz.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2/full.render.js"></script>
+    <script>
+        // 初始化 mermaid
+        mermaid.initialize({ startOnLoad: false });
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+
+        .input-section,
+        .output-section {
+            flex: 1;
+        }
+
+        textarea {
+            width: 100%;
+            height: 300px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .output-container {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            min-height: 300px;
+            background-color: #f9f9f9;
+            overflow: auto;
+        }
+
+        .code-output {
+            white-space: pre-wrap;
+            font-family: monospace;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        select {
+            padding: 10px;
+            margin-right: 10px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+
+        .status-indicator {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .status-starting {
+            background-color: #fff9c4;
+            color: #5d4037;
+        }
+
+        .status-running {
+            background-color: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .status-error {
+            background-color: #ffcdd2;
+            color: #c62828;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Text to Diagram Converter</h1>
+    <div id="agent-status" class="status-indicator status-starting">Initializing agent...</div>
+
+    <div class="container">
+        <div class="input-section">
+            <h2>Input</h2>
+            <div>
+                <select id="format-select">
+                    <option value="graphviz">Graphviz</option>
+                    <option value="mermaid">Mermaid</option>
+                </select>
+                <button id="generate-btn">Generate Diagram</button>
+            </div>
+            <textarea id="text-input"
+                placeholder="Describe your diagram here. For example: 'Create a flowchart showing the user registration process with login, signup, email verification, and profile creation steps.'"></textarea>
+            <div class="error" id="error-message"></div>
+        </div>
+
+        <div class="output-section">
+            <h2>Output</h2>
+            <div class="loading" id="loading-indicator">Generating diagram... This may take a few seconds.</div>
+            <div class="output-container" id="diagram-output">
+                <p>Your diagram will appear here.</p>
+            </div>
+            <h3>Generated Code</h3>
+            <div class="code-output" id="code-output">Code will appear here.</div>
+        </div>
+    </div>
+
+    <script>
+        // 获取当前页面的主机名和端口
+        const currentHost = window.location.hostname;
+        const currentPort = window.location.port;
+
+        // 构建API URL
+        const apiBaseUrl = `http://${currentHost}:${currentPort}`;
+
+        // 创建一个 Viz 实例用于渲染 Graphviz
+        const viz = new Viz();
+
+        // Agent 生命周期管理
+        const CHANNEL_NAME = `diagram_${Math.floor(Math.random() * 1000000)}`;
+        const GRAPH_NAME = 'graph_generator';
+        let pingInterval = null;
+        const statusIndicator = document.getElementById('agent-status');
+        const generateBtn = document.getElementById('generate-btn');
+
+        // 初始化应用
+        async function initApp() {
+            generateBtn.disabled = true;
+            statusIndicator.className = 'status-indicator status-starting';
+            statusIndicator.textContent = 'Checking agent status...';
+
+            try {
+                // 检查是否已有运行中的 graph_generator
+                const agentRunning = await checkAgentStatus();
+
+                if (!agentRunning) {
+                    statusIndicator.textContent = 'Starting agent...';
+                    await startAgent();
+                }
+
+                // 开始定期 ping
+                startPinging();
+
+                statusIndicator.className = 'status-indicator status-running';
+                statusIndicator.textContent = 'Agent is running';
+                generateBtn.disabled = false;
+            } catch (error) {
+                console.error('Initialization error:', error);
+                statusIndicator.className = 'status-indicator status-error';
+                statusIndicator.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // 检查 agent 状态
+        async function checkAgentStatus() {
+            try {
+                const response = await fetch(`${apiBaseUrl}/list`);
+                const data = await response.json();
+
+                if (data.code !== "0") {
+                    throw new Error(data.msg || 'Failed to list agents');
+                }
+
+                // 查找是否有 graph_generator 实例
+                const agents = data.data || [];
+                for (const agent of agents) {
+                    if (agent && agent.graphName === GRAPH_NAME) {
+                        return true;
+                    }
+                }
+                return false;
+            } catch (error) {
+                console.error('Error checking agent status:', error);
+                return false;
+            }
+        }
+
+        // 启动 agent
+        async function startAgent() {
+            try {
+                const response = await fetch(`${apiBaseUrl}/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        channel_name: CHANNEL_NAME,
+                        graph_name: GRAPH_NAME,
+                        bot_uid: 1000,
+                        user_uid: 2000
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.code !== "0") {
+                    throw new Error(data.msg || 'Failed to start agent');
+                }
+
+                return true;
+            } catch (error) {
+                console.error('Error starting agent:', error);
+                throw error;
+            }
+        }
+
+        // ping agent 保持活跃
+        async function pingAgent() {
+            try {
+                const response = await fetch(`${apiBaseUrl}/ping`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        channel_name: CHANNEL_NAME
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.code !== "0") {
+                    console.warn('Ping failed, attempting to restart agent');
+                    await startAgent();
+                }
+            } catch (error) {
+                console.error('Error pinging agent:', error);
+                statusIndicator.className = 'status-indicator status-error';
+                statusIndicator.textContent = 'Connection lost, attempting to reconnect...';
+
+                try {
+                    await startAgent();
+                    statusIndicator.className = 'status-indicator status-running';
+                    statusIndicator.textContent = 'Agent reconnected';
+                } catch (restartError) {
+                    statusIndicator.textContent = 'Failed to reconnect agent';
+                }
+            }
+        }
+
+        // 停止 agent
+        async function stopAgent() {
+            try {
+                const response = await fetch(`${apiBaseUrl}/stop`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        channel_name: CHANNEL_NAME
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.code !== "0") {
+                    console.warn('Warning: Failed to stop agent:', data.msg);
+                }
+            } catch (error) {
+                console.error('Error stopping agent:', error);
+            }
+        }
+
+        // 开始定期 ping
+        function startPinging() {
+            // 每 30 秒 ping 一次
+            pingInterval = setInterval(pingAgent, 30000);
+        }
+
+        // 页面卸载时清理
+        window.addEventListener('beforeunload', async () => {
+            if (pingInterval) {
+                clearInterval(pingInterval);
+            }
+            await stopAgent();
+        });
+
+        // 生成图表
+        document.getElementById('generate-btn').addEventListener('click', async () => {
+            const text = document.getElementById('text-input').value;
+            const format = document.getElementById('format-select').value;
+            const diagramOutput = document.getElementById('diagram-output');
+            const codeOutput = document.getElementById('code-output');
+            const errorMessage = document.getElementById('error-message');
+            const loadingIndicator = document.getElementById('loading-indicator');
+
+            if (!text) {
+                errorMessage.textContent = 'Please enter a description';
+                return;
+            }
+
+            errorMessage.textContent = '';
+            loadingIndicator.style.display = 'block';
+            diagramOutput.innerHTML = '';
+            codeOutput.textContent = '';
+
+            try {
+                // 确保 agent 正在运行
+                if (statusIndicator.className !== 'status-indicator status-running') {
+                    await pingAgent();
+                }
+
+                const response = await fetch(`${apiBaseUrl}/api/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        format: format
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                loadingIndicator.style.display = 'none';
+
+                if (data.success) {
+                    // 显示代码
+                    if (data.code) {
+                        codeOutput.textContent = data.code;
+
+                        // 根据格式选择渲染方法
+                        if (format === 'mermaid') {
+                            // 使用 Mermaid.js 渲染
+                            diagramOutput.innerHTML = '<div class="mermaid"></div>';
+                            const mermaidDiv = diagramOutput.querySelector('.mermaid');
+                            mermaidDiv.textContent = data.code;
+
+                            try {
+                                await mermaid.run({
+                                    nodes: [mermaidDiv]
+                                });
+                            } catch (mermaidError) {
+                                console.error('Mermaid rendering error:', mermaidError);
+                                diagramOutput.innerHTML = `<p>Error rendering Mermaid diagram: ${mermaidError.message}</p>`;
+                            }
+                        } else if (format === 'graphviz') {
+                            // 使用 Viz.js 渲染 Graphviz
+                            try {
+                                const svgString = await viz.renderString(data.code);
+                                diagramOutput.innerHTML = svgString;
+                            } catch (vizError) {
+                                console.error('Graphviz rendering error:', vizError);
+                                diagramOutput.innerHTML = `<p>Error rendering Graphviz diagram: ${vizError.message}</p>`;
+                            }
+                        } else if (data.image_data) {
+                            // 如果有图像数据，使用它
+                            diagramOutput.innerHTML = `<img src="data:${data.mime_type};base64,${data.image_data}" alt="Generated Diagram" style="max-width:100%;">`;
+                        } else {
+                            diagramOutput.innerHTML = 'No diagram generated';
+                        }
+                    }
+                } else {
+                    errorMessage.textContent = data.error || 'Failed to generate diagram';
+                    diagramOutput.innerHTML = 'Error generating diagram';
+                }
+            } catch (error) {
+                loadingIndicator.style.display = 'none';
+                errorMessage.textContent = `Error: ${error.message}`;
+                diagramOutput.innerHTML = 'Error connecting to server';
+
+                // 重新检查 agent 状态
+                statusIndicator.className = 'status-indicator status-error';
+                statusIndicator.textContent = 'Connection error. Please refresh the page.';
+            }
+        });
+
+        // 初始化应用
+        initApp();
+    </script>
+</body>
+
+</html>
